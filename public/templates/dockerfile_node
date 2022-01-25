@@ -1,0 +1,7 @@
+FROM {{docker_runtime}}:{{docker_runtime_version}}
+WORKDIR /usr/src/app
+COPY package*.json ./
+RUN {{docker_build}}
+COPY . .
+EXPOSE {{docker_port}}
+CMD {{docker_run}}

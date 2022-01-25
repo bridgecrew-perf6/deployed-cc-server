@@ -31,7 +31,7 @@ We recommend using our managed [deployed.cc](https://deployed.cc) service (we ha
 - Install Node.js
 - Run [Parse Server container]([https://hub.docker.com/r/parseplatform/parse-server](https://hub.docker.com/r/parseplatform/parse-server))
 - Clone deployed-cc-server (this repository)
-- Update .env file with your real values
+- Update sample.env file with your real values and rename to .env
 - Run deployed-cc-server using “npm install & node index.js”
 - (Optional) If you want to run deployed-cc-server forever you can install PM2 and run deployed-cc-server using PM2
 - (Optional) Install Caddy Server if you want to add a custom domain with HTTPS to your Deployed.cc server

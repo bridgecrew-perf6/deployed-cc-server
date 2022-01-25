@@ -1,0 +1,34 @@
+{
+  "name": "dep-backend",
+  "version": "0.0.1",
+  "description": "Main backend for deployed.cc",
+  "main": "index.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+ssh://git@bitbucket.org/coded-sh/dep-backend.git"
+  },
+  "author": "",
+  "license": "ISC",
+  "bugs": {
+    "url": "https://bitbucket.org/coded-sh/dep-backend/issues"
+  },
+  "homepage": "https://bitbucket.org/coded-sh/dep-backend#readme",
+  "dependencies": {
+    "body-parser": "^1.19.0",
+    "cors": "^2.8.5",
+    "dotenv": "^14.2.0",
+    "got": "^11.8.2",
+    "node-ssh": "^12.0.0",
+    "os-utils": "0.0.14",
+    "ovh": "^2.0.3",
+    "parse": "^3.3.0",
+    "polka": "^0.5.2",
+    "serve-static": "^1.14.1",
+    "simple-git": "^2.44.0",
+    "stripe": "^8.195.0",
+    "superagent": "^6.1.0"
+  }
+}
