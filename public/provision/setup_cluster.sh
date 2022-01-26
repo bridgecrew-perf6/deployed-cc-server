@@ -3,6 +3,9 @@
 while sudo fuser /var/{lib/{dpkg,apt/lists},cache/apt/archives}/lock >/dev/null 2>&1; do sleep 1; done
 while sudo fuser /var/lib/dpkg/lock-frontend >/dev/null 2>&1; do sleep 1; done
 
+sudo ufw allow 80
+sudo ufw allow 443
+
 DEBIAN_FRONTEND=noninteractive  sudo apt-get update
 DEBIAN_FRONTEND=noninteractive  sudo apt-get install -y npm
 npm install pm2@latest -g

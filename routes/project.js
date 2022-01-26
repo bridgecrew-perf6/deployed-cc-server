@@ -11,7 +11,7 @@ Parse.initialize(ParseAppId);
 Parse.serverURL = process.env.PARSE_SERVER_URL;
 
 const domain = process.env.SERVER_DOMAIN;
-const ovh_api = require('ovh')({
+const ovh = require('ovh')({
   endpoint: process.env.OVH_ENDPOINT,
   appKey: process.env.OVH_APP_KEY,
   appSecret: process.env.OVH_APP_SECRET,
@@ -308,14 +308,14 @@ module.exports = function (app) {
                 subdomain = `${req.body.name.toLowerCase()}-${env_name}`;
             }
 
-            ovh_api.request('POST', `/domain/zone/${domain}/record`, {
+            ovh.request('POST', `/domain/zone/${domain}/record`, {
                 fieldType: 'CNAME',
                 subDomain: subdomain,
                 target: cluster_id.toLowerCase() + `.${domain}.`
             }, function (err, new_record) {
                 console.log(err || new_record);
                 //Refresh OVH DNS records
-                ovh_api.request('POST', `/domain/zone/${domain}/refresh`, async function (err, is_refreshed) {
+                ovh.request('POST', `/domain/zone/${domain}/refresh`, async function (err, is_refreshed) {
                     console.log(err || is_refreshed);
                     cname_records_amount = cname_records_amount - 1;
                     if (cname_records_amount == 0) {

@@ -17,7 +17,6 @@ require("./routes/domain")(app);
 require("./routes/environment")(app);
 require("./routes/event")(app);
 require("./routes/health")(app);
-require("./routes/payment")(app);
 require("./routes/project")(app);
 
 //Start provision queue

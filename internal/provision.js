@@ -80,7 +80,7 @@ function clusterProvision(next_cluster) {
         fs.writeFileSync(`./public/provision/${cluster_id}_cluster_config.json`, JSON.stringify(cluster_config));
 
         ssh.putFiles([{ local: `./public/provision/${cluster_id}_cluster_config.json`, remote: '/root/cluster_config.json' }, { local: `./public/provision/${cluster_id}_setup_cluster.sh`, remote: '/root/setup_cluster.sh' }, { local: `./public/templates/${cluster_id}_haproxy.cfg`, remote: '/root/haproxy.cfg' }, { local: `./public/templates/${cluster_id}_haproxy-ssl.cfg`, remote: '/root/haproxy-ssl.cfg' }]).then(function () {
-            console.log("The File thing is done");
+            console.log("Config file and provision script are uploaded to a new cluster");
             exec(`rm ./public/provision/${cluster_id}_cluster_config.json && rm ./public/provision/${cluster_id}_setup_cluster.sh && rm ./public/templates/${cluster_id}_haproxy-ssl.cfg && rm ./public/templates/${cluster_id}_haproxy.cfg`, function (err, stdout, stderr) {
             });
 
@@ -96,13 +96,14 @@ function clusterProvision(next_cluster) {
             }).then(function () {
                 clusters_to_install.splice(0, 1);
                 is_cluster_installing = false;
-                ssh.execCommand('sleep 30 && while sudo fuser /var/{lib/{dpkg,apt/lists},cache/apt/archives}/lock >/dev/null 2>&1; do sleep 1; done && ./setup_cluster.sh', {
+                var log_msg = '';
+                ssh.execCommand('sleep 15 && while sudo fuser /var/{lib/{dpkg,apt/lists},cache/apt/archives}/lock >/dev/null 2>&1; do sleep 1; done && ./setup_cluster.sh', {
                     cwd: '/root',
                     onStdout(chunk) {
-                        console.log(cluster_id + ": " + chunk.toString('utf8'))
+                        log_msg = printLogMsgIfNeeded(chunk,log_msg, cluster_parse_obj.get("name"));
                     },
                     onStderr(chunk) {
-                        console.log(cluster_id + ": " + chunk.toString('utf8'))
+                        log_msg = printLogMsgIfNeeded(chunk,log_msg, cluster_parse_obj.get("name"));
                     }
                 }).then(function () {
                     console.log("result========");
@@ -131,5 +132,24 @@ function clusterProvision(next_cluster) {
     });
 }
 
-module.exports = { provisionNextClient };
-exports.clusters_to_install = clusters_to_install;
+function printLogMsgIfNeeded(chunk, log_msg, cluster_name){
+    log_msg += chunk.toString('utf8');
+                        var newline_index = log_msg.indexOf('\n');
+                        if (newline_index != -1){
+                            log_msg = log_msg.replace(/\n/g, '');
+                            var msg_to_show = log_msg.substring(0,newline_index);
+                            console.log(`${cluster_name}: ` + msg_to_show);
+                            if (log_msg.length > newline_index){
+                                log_msg = log_msg.substring(newline_index ,log_msg.length);
+                            }else{
+                                log_msg = '';
+                            }
+                        }
+                        return log_msg;
+}
+
+function addClusterToQueue(new_cluster){
+    clusters_to_install.push(new_cluster);
+}
+
+module.exports = { provisionNextClient, addClusterToQueue };

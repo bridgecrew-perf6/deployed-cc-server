@@ -20,7 +20,7 @@ class Auth {
             return null;
         }
 
-        //Check a token is valid and get an user by token
+        //Check if a token is valid and get an user by token
         try {
             const res = await superagent.get(Parse.serverURL + '/users/me').send({}).set({ 'X-Parse-Application-Id': ParseAppId, 'X-Parse-Session-Token': token }).set('accept', 'json');
             console.log(res.statusCode);

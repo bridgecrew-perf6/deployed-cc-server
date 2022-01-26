@@ -20,12 +20,17 @@ Array.from(crypto.randomFillSync(new Uint32Array(length)))
 .join('');
 
 const domain = process.env.SERVER_DOMAIN;
+const ovh = require('ovh')({
+	endpoint: process.env.OVH_ENDPOINT,
+	appKey: process.env.OVH_APP_KEY,
+	appSecret: process.env.OVH_APP_SECRET,
+	consumerKey: process.env.OVH_CONSUMER_KEY
+  });
 
 const Auth = require("./auth");
 const auth = new Auth();
 
 var provision = require('../internal/provision');
-var clusters_to_install = provision.clusters_to_install;
 
 module.exports = function (app) {
 
@@ -182,7 +187,7 @@ module.exports = function (app) {
 							//4) after add new_cluster to clusters_to_install
 
 							//Add cluster to provision queue
-							clusters_to_install.push(new_cluster);
+							provision.addClusterToQueue(new_cluster);
 
 							res.statusCode = 201;
 							res.end(JSON.stringify({ id: cluster.id }));
