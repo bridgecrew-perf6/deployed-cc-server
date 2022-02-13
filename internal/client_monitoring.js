@@ -24,7 +24,7 @@ function getServerStats() {
 
 async function checkServers() {
     try {
-        const projects_res = await superagent.get(Parse.serverURL + '/classes/Cluster').query({ order: "-createdAt" }).set({ 'X-Parse-MASTER-Key': ParseMasterKey, 'X-Parse-Application-Id': ParseAppId }).set('accept', 'json');
+        const projects_res = await superagent.get(Parse.serverURL + '/classes/Cluster').query({ where: { status: "ready" }, order: "-createdAt" }).set({ 'X-Parse-MASTER-Key': ParseMasterKey, 'X-Parse-Application-Id': ParseAppId }).set('accept', 'json');
         console.log("checkServers: request /Project, status code: " + projects_res.statusCode);
         if (projects_res.statusCode != 200) {
             console.error("checkServers: request /Project, status code: " + projects_res.statusCode);

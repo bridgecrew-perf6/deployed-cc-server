@@ -10,6 +10,12 @@ Parse.initialize(ParseAppId);
 Parse.serverURL = process.env.PARSE_SERVER_URL;
 
 const domain = process.env.SERVER_DOMAIN;
+const ovh = require('ovh')({
+	endpoint: process.env.OVH_ENDPOINT,
+	appKey: process.env.OVH_APP_KEY,
+	appSecret: process.env.OVH_APP_SECRET,
+	consumerKey: process.env.OVH_CONSUMER_KEY
+  });
 
 const Auth = require("./auth");
 const auth = new Auth();
@@ -17,6 +23,9 @@ const auth = new Auth();
 module.exports = function (app) {
 
     app.post('/environment', async function (req, res) {
+
+        console.log(`/POST /environment, body: ${JSON.stringify(req.body)}`);
+        
         try{
           const logged_user = await auth.handleAllReqs(req, res);
           if (logged_user == null){
@@ -26,12 +35,14 @@ module.exports = function (app) {
           const project_id = req.body.project_id;
           const env_name = req.body.name;
           const branch_name = req.body.branch;
-  
+          
           //Get project created in /checking_git request
           var current_project = {};
           try {
             const get_res = await superagent.get(Parse.serverURL + '/classes/Project/' + project_id).send({}).set({'X-Parse-Application-Id': ParseAppId, 'X-Parse-Session-Token': req.headers['authorization']}).set('accept', 'json');
             if (get_res.statusCode != 200){
+              console.log("0");
+
               res.statusCode = 401;
               res.end(JSON.stringify({message:"Unable to authenticate you.", id: "unauthorized", add_info:err}));
               return;
@@ -39,6 +50,8 @@ module.exports = function (app) {
               current_project = get_res.body;
             }
           } catch (err) {
+            console.log("1");
+
             res.statusCode=401;
             res.end(JSON.stringify({error:err}));
             return;
@@ -52,28 +65,21 @@ module.exports = function (app) {
             }
           }
   
+          console.log("2");
           const cluster_id = current_project.clusters[0];
-          var next_port = 0;
-          try {
-            const put_res = await superagent.get(Parse.serverURL + '/classes/Cluster/' + cluster_id).send({}).set({'X-Parse-Application-Id': ParseAppId, 'X-Parse-Session-Token': req.headers['authorization']}).set('accept', 'json');
-            next_port = put_res.body.next_port;
-            if (put_res.statusCode != 200){
-              res.statusCode = 401;
-              res.end(JSON.stringify({message:"Unable to authenticate you.", id: "unauthorized"}));
-              return;
-            }
-          } catch (err) {
-            res.statusCode=401;
-            res.end(JSON.stringify({error:err}));
-          }
   
           var new_environment = {};
           new_environment.name = env_name;
           new_environment.branch = branch_name;
-          new_environment.cluster_port = next_port;
-          new_environment.custom_domains = [];
-          new_environment.domains = [`${project_id.toLowerCase()}-${env_name.toLowerCase()}.${domain}`];
-  
+          new_environment.custom_domains = [];  
+          var subdomain = '';
+          if (env_name == 'production'){
+            subdomain = current_project.name.toLowerCase();
+          }else{
+            subdomain = `${current_project.name.toLowerCase()}-${env_name}`;
+          }
+          new_environment.domains = [`${subdomain}.${domain}`];
+
           var update = {};
           update.environments = current_project.environments;
           update.environments.push(new_environment);
@@ -81,36 +87,63 @@ module.exports = function (app) {
           try {
             const put_res = await superagent.put(Parse.serverURL + '/classes/Project/' + project_id).send(update).set({'X-Parse-Application-Id': ParseAppId, 'X-Parse-Session-Token': req.headers['authorization']}).set('accept', 'json');
             if (put_res.statusCode != 200){
+              console.log("3");
+
               res.statusCode = 401;
               res.end(JSON.stringify({message:"Unable to authenticate you.", id: "unauthorized"}));
             }
           } catch (err) {
+            console.log("4");
+
             res.statusCode = 401;
             res.end(JSON.stringify({message:"Unable to authenticate you.", id: "unauthorized", add_info:err}));
           }
-  
-          //Update cluster with new next port
-          try {
-            const put_res = await superagent.put(Parse.serverURL + '/classes/Cluster/' + cluster_id).send({"next_port":(next_port + 1)}).set({'X-Parse-Application-Id': ParseAppId, 'X-Parse-Session-Token': req.headers['authorization']}).set('accept', 'json');
-            if (put_res.statusCode != 200){
-              res.statusCode = 401;
-              res.end(JSON.stringify({message:"Unable to authenticate you.", id: "unauthorized"}));
-              return;
-            }
-          } catch (err) {
-            res.statusCode = 401;
-            res.end(JSON.stringify({message:"Unable to authenticate you.", id: "unauthorized", add_info:err}));
-            return;
-          }
-  
+
+          /*
+
+                //Adding CNAME records for new projects
+                var cname_records_amount = environments.length;
+                environments.forEach((environment) => {
+                    var env_name = environment.name.toLowerCase();
+                    var subdomain = '';
+                    if (env_name == 'production') {
+                        subdomain = name.toLowerCase();
+                    } else {
+                        subdomain = `${name.toLowerCase()}-${env_name}`;
+                    }
+                    ovh.request('POST', `/domain/zone/${domain}/record`, {
+                        fieldType: 'CNAME',
+                        subDomain: subdomain,
+                        target: cluster_id.toLowerCase() + `.${domain}.`
+                    }, function (err, new_record) {
+                        if (err != null) {
+                            logger.error(`POST /project: Cannot add CNAME record. Response from DNS provider:  ${err}`);
+                        } else {
+                            logger.info(`POST /project: CNAME record for project: ${service_id} added. Response from DNS provider: ${JSON.stringify(new_record)}`);
+                        }
+                        //Refresh OVH DNS records
+                        ovh.request('POST', `/domain/zone/${domain}/refresh`, async function (err, is_refreshed) {
+                            if (err != null) {
+                                logger.error(`POST /project: Cannot refreshh CNAME record. Response from DNS provider:  ${err}`);
+                            } else {
+                                logger.info(`POST /project: DNS record for project: ${service_id} has been refreshed`);
+                            }
+                            cname_records_amount = cname_records_amount - 1;
+                            if (cname_records_amount == 0) {
+                                try {
+                                    //Deploy a container with a new service
+                                    //await superagent.post(`https://${cluster_id.toLowerCase()}.${domain}/service`).send({ "service_id": service_id }).set({ 'authorization': req.headers['authorization'] }).set('accept', 'json');
+                                    logger.info(`POST /project: Job scheduled: Deployment for project with id: ${service_id}`);
+                                } catch (err) {
+                                    logger.error(`POST /project: Cannot schedule new job: Deploy project with id: ${service_id}, error: ${err.response.text}, status: ${err.response.status}`);
+                                }
+                            }
+                        });
+                    });
+                });
+                */
   
           //Adding CNAME record for new environment
-          var subdomain = '';
-          if (env_name == 'production'){
-            subdomain = project_id.toLowerCase();
-          }else{
-            subdomain = `${project_id.toLowerCase()}-${env_name}`;
-          }
           ovh.request('POST', `/domain/zone/${domain}/record`, {
             fieldType: 'CNAME',
             subDomain: subdomain,
@@ -135,12 +168,16 @@ module.exports = function (app) {
                     res.statusCode=201;
                     res.end(JSON.stringify({}));
                   }else{
+                    console.log("5");
+
                     res.statusCode = 401;
                     res.end(JSON.stringify({message:"Unable to authenticate you.", id: "unauthorized"}));
                     console.log('Invalid token');
                   }
                 } catch (err) {
                   console.log(err);
+                  console.log("6");
+
                   res.statusCode = 401;
                   res.end(JSON.stringify({message:"Unable to authenticate you.", id: "unauthorized", add_info:err}));
                 }
@@ -149,6 +186,7 @@ module.exports = function (app) {
   
   
           }catch(err){
+            console.log(err);
             res.statusCode = 401;
             res.end(JSON.stringify({message:"Unable to authenticate you.", id: "unauthorized", add_info:err}));
           }

@@ -1,6 +1,6 @@
 /*
 	cluster.js
-	Methods for managing clusters (clients)
+	Methods for managing clusters
 */
 const superagent = require('superagent');
 
@@ -9,15 +9,6 @@ const ParseMasterKey = process.env.PARSE_MASTER_KEY;
 const ParseAppId = process.env.PARSE_APP_ID;
 Parse.initialize(ParseAppId);
 Parse.serverURL = process.env.PARSE_SERVER_URL;
-
-const crypto = require('crypto');
-const generatePassword = (
-  length = 16,
-  wishlist = '0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz'
-) =>
-Array.from(crypto.randomFillSync(new Uint32Array(length)))
-.map((x) => wishlist[x % wishlist.length])
-.join('');
 
 const domain = process.env.SERVER_DOMAIN;
 const ovh = require('ovh')({
@@ -127,6 +118,7 @@ module.exports = function (app) {
 		Provision new cluster (client) to the user's account over SSH
 	*/
 	app.post('/cluster', async function (req, res) {
+		console.log(req.headers);
 		const logged_user = await auth.handleAllReqs(req, res);
 		if (logged_user == null) {
 			return;
@@ -142,10 +134,7 @@ module.exports = function (app) {
 		cluster.set("status", "install");
 		cluster.set("name", req.body.name);
 		cluster.set("type", req.body.type);
-		cluster.set("notification_key", generatePassword(32)); //Used for POST /event in dep_backend
-		cluster.set("hook_key", generatePassword()); //Used for /deploy/:hook_key in dep_cluster
 		cluster.set("region", req.body.region);
-		cluster.set("next_port", 4010); //all user project ports start from 4010
 		cluster.set("ip", new_cluster.ip);
 		cluster.set("stats", {});
 
@@ -160,6 +149,7 @@ module.exports = function (app) {
 		cluster.save()
 			.then((saved_cluster) => {
 				new_cluster.parse_obj = saved_cluster;
+
 				console.log('New cluster added to DB with objectId: ' + saved_cluster.id);
 
 				var cluster_id = saved_cluster.id.toLowerCase();
@@ -180,12 +170,6 @@ module.exports = function (app) {
 					ovh.request('POST', `/domain/zone/${domain}/refresh`, function (err, is_refreshed) {
 						console.log(err || is_refreshed);
 						if (err == null) {
-							//ToDo
-							//1) check if the current user has private/public keys
-							//2) if not - generate new using https://www.npmjs.com/package/ssh-keygen
-							//3) after that save to user's object and set them to new_cluster.user.publicKey & new_cluster.user.privateKey
-							//4) after add new_cluster to clusters_to_install
-
 							//Add cluster to provision queue
 							provision.addClusterToQueue(new_cluster);
 
@@ -250,7 +234,7 @@ module.exports = function (app) {
 
 		//ToDo: remove setting pub key, all user clients have to use same keys from User Prase Server Object
 		try {
-			const put_res = await superagent.put(Parse.serverURL + '/classes/Cluster/' + req.body.cluster_id).send({ "status": "ready", "pub_key": req.body.pub_key }).set({ 'X-Parse-Application-Id': ParseAppId, 'X-Parse-Session-Token': req.headers['authorization'] }).set('accept', 'json');
+			const put_res = await superagent.put(Parse.serverURL + '/classes/Cluster/' + req.body.cluster_id).send({ "status": "ready"}).set({ 'X-Parse-Application-Id': ParseAppId, 'X-Parse-Session-Token': req.headers['authorization'] }).set('accept', 'json');
 			console.log(put_res);
 			if (put_res.statusCode == 200) {
 				res.statusCode = 200;

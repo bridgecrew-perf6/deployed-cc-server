@@ -64,6 +64,10 @@ function clusterProvision(next_cluster) {
         provision_script = provision_script.replace(/{{token}}/g, logged_user.sessionToken);
         provision_script = provision_script.replace(/{{url}}/g, process.env.DEPLOYED_CC_SERVER_API_ENDPOINT);
         provision_script = provision_script.replace(/{{domain}}/g, domain);
+        provision_script = provision_script.replace(/{{client_URL}}/g, process.env.CLIENT_GIT_REPO);
+
+        provision_script = provision_script.replace(/{{priv_key}}/g, logged_user.priv_key);
+        provision_script = provision_script.replace(/{{pub_key}}/g, logged_user.pub_key);
 
         //ToDo
         //save keys from user's object - logged_user

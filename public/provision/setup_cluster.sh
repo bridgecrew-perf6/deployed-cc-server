@@ -10,7 +10,9 @@ DEBIAN_FRONTEND=noninteractive  sudo apt-get update
 DEBIAN_FRONTEND=noninteractive  sudo apt-get install -y npm
 npm install pm2@latest -g
 
-ssh-keygen -t rsa -q -f "$HOME/.ssh/id_rsa" -N ""
+echo "{{priv_key}}" >> $HOME/.ssh/id_rsa
+echo "{{pub_key}}" >> $HOME/.ssh/id_rsa.pub
+chmod  400 ~/.ssh/id_rsa
 
 ssh-keyscan bitbucket.org >> ~/.ssh/known_hosts
 ssh-keyscan github.com >> ~/.ssh/known_hosts
@@ -48,7 +50,7 @@ rm /etc/haproxy/haproxy.cfg
 mv /root/haproxy.cfg /etc/haproxy/haproxy.cfg
 sudo systemctl restart haproxy
 
-git clone https://bitbucket.org/coded-sh/dep-cluster.git
+git clone {{client_URL}}
 cd dep-cluster
 npm install
 pm2 start index.js --name "dep-cluster"
@@ -67,4 +69,4 @@ rm /etc/haproxy/haproxy.cfg
 mv /root/haproxy-ssl.cfg /etc/haproxy/haproxy.cfg
 sudo systemctl restart haproxy
 
-curl -d '{"pub_key":"'"$(cat /root/.ssh/id_rsa.pub)"'","cluster_id":"{{cluster_parse_obj_id}}"}'  -H "authorization:{{token}}" -H "Content-Type: application/json" -X POST {{url}}/cluster-ready
+curl -d '{"cluster_id":"{{cluster_parse_obj_id}}"}'  -H "authorization:{{token}}" -H "Content-Type: application/json" -X POST {{url}}/cluster-ready
