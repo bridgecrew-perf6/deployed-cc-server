@@ -23,8 +23,6 @@ const auth = new Auth();
 module.exports = function (app) {
 
     app.post('/environment', async function (req, res) {
-
-        console.log(`/POST /environment, body: ${JSON.stringify(req.body)}`);
         
         try{
           const logged_user = await auth.handleAllReqs(req, res);

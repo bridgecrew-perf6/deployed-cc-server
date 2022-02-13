@@ -46,7 +46,6 @@ module.exports = function (app, logger, parse) {
         const Project = Parse.Object.extend("Project");
         const project = new Project();
         project.set("name", name);
-        project.set("services", []);
 
         var acl = new Parse.ACL();
         acl.setPublicReadAccess(false);
@@ -104,6 +103,20 @@ module.exports = function (app, logger, parse) {
 
         const project_id = req.params.project_id;
         try {
+            //Remove all Services from this Project
+            const services = await superagent.get(parse.serverURL + '/classes/Service').query({where:{project_id:project_id}}).set({ 'X-Parse-Application-Id': parse.ParseAppId, 'X-Parse-Session-Token': req.headers['authorization'] }).set('accept', 'json');
+            var requests = [];
+            services.body.results.forEach((service) => {
+                requests.push({method: "DELETE",
+                path: `/parse/classes/Service/${service.objectId}`});
+            });
+
+            //ToDo: Parse Server batch requests can include only up to 50 subrequests
+            //Now only max 50 services can be removed
+            if (requests.length > 0){
+                await superagent.post(parse.serverURL + '/batch').send({requests:requests}).set({ 'X-Parse-Application-Id': parse.ParseAppId, 'X-Parse-Session-Token': req.headers['authorization'] }).set('accept', 'json');
+            }
+
             const project_res = await superagent.delete(parse.serverURL + '/classes/Project/' + project_id).set({ 'X-Parse-Application-Id': parse.ParseAppId, 'X-Parse-Session-Token': req.headers['authorization'] }).set('accept', 'json');
             res.statusCode = 200;
             res.end(JSON.stringify(project_res.body));

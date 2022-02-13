@@ -1,6 +1,6 @@
 /*
     service.js
-    Methods for managing projects
+    Methods for managing services
 */
 const superagent = require('superagent');
 
@@ -109,22 +109,22 @@ module.exports = function (app, logger, parse) {
         //Not all fields can be updated
         const service_id = req.params.service_id;
         var service_update = {};
-        if (req.body.port){
+        if (req.body.port) {
             service_update.port = parseInt(req.body.port);
         }
-        if (req.body.build_cmd){
+        if (req.body.build_cmd) {
             service_update.build_cmd = req.body.build_cmd;
         }
-        if (req.body.run_cmd){
+        if (req.body.run_cmd) {
             service_update.run_cmd = req.body.run_cmd;
         }
-        if (req.body.publish_dir){
+        if (req.body.publish_dir) {
             service_update.publish_dir = req.body.publish_dir;
         }
-        if (req.body.runtime){
+        if (req.body.runtime) {
             service_update.runtime = req.body.runtime;
         }
-        if (req.body.runtime_version){
+        if (req.body.runtime_version) {
             service_update.runtime_version = req.body.runtime_version;
         }
 
@@ -175,25 +175,32 @@ module.exports = function (app, logger, parse) {
 
         const Service = parse.Object.extend("Service");
         const service = new Service();
-        if (req.body.git_url){
+        if (req.body.git_url) {
             service.set("git_url", req.body.git_url);
-        }else{
+        } else {
             res.statusCode = 400;
             res.end(JSON.stringify({ message: "git_url is required, format: git@bitbucket.org:coded-sh/repository_name.git", id: "bad_request" }));
             return;
         }
 
-        if (req.body.project_id){
+        if (req.body.project_id) {
             service.set("project_id", req.body.project_id);
-        }else{
+            try {
+                await superagent.get(parse.serverURL + '/classes/Project/' + req.body.project_id).set({ 'X-Parse-Application-Id': parse.ParseAppId, 'X-Parse-Session-Token': req.headers['authorization'] }).set('accept', 'json');
+            } catch (err) {
+                res.statusCode = 404;
+                res.end(JSON.stringify({ message: "No project with this project_id found", id: "not_found" }));
+                return;
+            }
+        } else {
             res.statusCode = 400;
             res.end(JSON.stringify({ message: "project_id is required", id: "bad_request" }));
             return;
         }
 
-        if (req.body.hook_key){
+        if (req.body.hook_key) {
             service.set("hook_key", req.body.hook_key);
-        }else{
+        } else {
             res.statusCode = 400;
             res.end(JSON.stringify({ message: "hook_key is required, hook_key is a random string", id: "bad_request" }));
             return;
@@ -203,57 +210,57 @@ module.exports = function (app, logger, parse) {
         service.set("name", req.body.name);
 
         //Type can be app, database or one_click_app
-        if (req.body.type && ["app","database","one_click_app"].indexOf(req.body.type) != -1){
+        if (req.body.type && ["app", "database", "one_click_app"].indexOf(req.body.type) != -1) {
             service.set("type", req.body.type);
-        }else{
+        } else {
             res.statusCode = 400;
             res.end(JSON.stringify({ message: "type is required and can be 'app', 'database' or 'one_click_app'", id: "bad_request" }));
             return;
         }
 
-        if (req.body.port){
+        if (req.body.port) {
             service.set("port", req.body.port);
-        }else{
+        } else {
             res.statusCode = 400;
             res.end(JSON.stringify({ message: "port is required", id: "bad_request" }));
             return;
         }
 
-        if (req.body.build_cmd){
+        if (req.body.build_cmd) {
             service.set("build_cmd", req.body.build_cmd);
-        }else{
+        } else {
             res.statusCode = 400;
             res.end(JSON.stringify({ message: "build_cmd is required", id: "bad_request" }));
             return;
         }
 
-        if (req.body.run_cmd){
+        if (req.body.run_cmd) {
             service.set("run_cmd", req.body.run_cmd);
-        }else{
+        } else {
             res.statusCode = 400;
             res.end(JSON.stringify({ message: "run_cmd is required", id: "bad_request" }));
             return;
         }
 
-        if (req.body.publish_dir){
+        if (req.body.publish_dir) {
             service.set("publish_dir", req.body.publish_dir);
-        }else{
+        } else {
             res.statusCode = 400;
             res.end(JSON.stringify({ message: "publish_dir is required", id: "bad_request" }));
             return;
         }
 
-        if (req.body.runtime){
+        if (req.body.runtime) {
             service.set("runtime", req.body.runtime);
-        }else{
+        } else {
             res.statusCode = 400;
             res.end(JSON.stringify({ message: "runtime is required", id: "bad_request" }));
             return;
         }
 
-        if (req.body.runtime_version){
+        if (req.body.runtime_version) {
             service.set("runtime_version", req.body.runtime_version);
-        }else{
+        } else {
             res.statusCode = 400;
             res.end(JSON.stringify({ message: "runtime_version is required", id: "bad_request" }));
             return;
@@ -268,7 +275,6 @@ module.exports = function (app, logger, parse) {
 
         service.save()
             .then(async (saved_service) => {
-                //Send a response to avoid very long connections
                 res.statusCode = 201;
                 res.end(JSON.stringify(saved_service));
             }, (error) => {
