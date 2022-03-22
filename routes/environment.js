@@ -4,254 +4,234 @@
 */
 const superagent = require('superagent');
 
-const Parse = require('parse/node');
-const ParseAppId = process.env.PARSE_APP_ID;
-Parse.initialize(ParseAppId);
-Parse.serverURL = process.env.PARSE_SERVER_URL;
-
 const domain = process.env.SERVER_DOMAIN;
-const ovh = require('ovh')({
-	endpoint: process.env.OVH_ENDPOINT,
-	appKey: process.env.OVH_APP_KEY,
-	appSecret: process.env.OVH_APP_SECRET,
-	consumerKey: process.env.OVH_CONSUMER_KEY
-  });
-
 const Auth = require("./auth");
 const auth = new Auth();
 
-module.exports = function (app) {
+module.exports = function (app, logger, parse) {
 
-    app.post('/environment', async function (req, res) {
-        
-        try{
-          const logged_user = await auth.handleAllReqs(req, res);
-          if (logged_user == null){
-            return;
-          }
-  
-          const project_id = req.body.project_id;
-          const env_name = req.body.name;
-          const branch_name = req.body.branch;
-          
-          //Get project created in /checking_git request
-          var current_project = {};
-          try {
-            const get_res = await superagent.get(Parse.serverURL + '/classes/Project/' + project_id).send({}).set({'X-Parse-Application-Id': ParseAppId, 'X-Parse-Session-Token': req.headers['authorization']}).set('accept', 'json');
-            if (get_res.statusCode != 200){
-              console.log("0");
+  /*
+    Create a new environment
+  */
+  app.post('/environment', async function (req, res) {
 
-              res.statusCode = 401;
-              res.end(JSON.stringify({message:"Unable to authenticate you.", id: "unauthorized", add_info:err}));
-              return;
-            }else{
-              current_project = get_res.body;
-            }
-          } catch (err) {
-            console.log("1");
-
-            res.statusCode=401;
-            res.end(JSON.stringify({error:err}));
-            return;
-          }
-  
-          for (let i = 0; i < current_project.environments.length; i++){
-            if (current_project.environments[i].name.toLowerCase() == env_name.toLowerCase()){
-              res.statusCode=409;
-              res.end(JSON.stringify({message:`Environment ${env_name.toLowerCase()} already exists`, id: "conflict"}));
-              throw "Environment with this name already exist";
-            }
-          }
-  
-          console.log("2");
-          const cluster_id = current_project.clusters[0];
-  
-          var new_environment = {};
-          new_environment.name = env_name;
-          new_environment.branch = branch_name;
-          new_environment.custom_domains = [];  
-          var subdomain = '';
-          if (env_name == 'production'){
-            subdomain = current_project.name.toLowerCase();
-          }else{
-            subdomain = `${current_project.name.toLowerCase()}-${env_name}`;
-          }
-          new_environment.domains = [`${subdomain}.${domain}`];
-
-          var update = {};
-          update.environments = current_project.environments;
-          update.environments.push(new_environment);
-  
-          try {
-            const put_res = await superagent.put(Parse.serverURL + '/classes/Project/' + project_id).send(update).set({'X-Parse-Application-Id': ParseAppId, 'X-Parse-Session-Token': req.headers['authorization']}).set('accept', 'json');
-            if (put_res.statusCode != 200){
-              console.log("3");
-
-              res.statusCode = 401;
-              res.end(JSON.stringify({message:"Unable to authenticate you.", id: "unauthorized"}));
-            }
-          } catch (err) {
-            console.log("4");
-
-            res.statusCode = 401;
-            res.end(JSON.stringify({message:"Unable to authenticate you.", id: "unauthorized", add_info:err}));
-          }
-
-          /*
-
-                //Adding CNAME records for new projects
-                var cname_records_amount = environments.length;
-                environments.forEach((environment) => {
-                    var env_name = environment.name.toLowerCase();
-                    var subdomain = '';
-                    if (env_name == 'production') {
-                        subdomain = name.toLowerCase();
-                    } else {
-                        subdomain = `${name.toLowerCase()}-${env_name}`;
-                    }
-                    ovh.request('POST', `/domain/zone/${domain}/record`, {
-                        fieldType: 'CNAME',
-                        subDomain: subdomain,
-                        target: cluster_id.toLowerCase() + `.${domain}.`
-                    }, function (err, new_record) {
-                        if (err != null) {
-                            logger.error(`POST /project: Cannot add CNAME record. Response from DNS provider:  ${err}`);
-                        } else {
-                            logger.info(`POST /project: CNAME record for project: ${service_id} added. Response from DNS provider: ${JSON.stringify(new_record)}`);
-                        }
-                        //Refresh OVH DNS records
-                        ovh.request('POST', `/domain/zone/${domain}/refresh`, async function (err, is_refreshed) {
-                            if (err != null) {
-                                logger.error(`POST /project: Cannot refreshh CNAME record. Response from DNS provider:  ${err}`);
-                            } else {
-                                logger.info(`POST /project: DNS record for project: ${service_id} has been refreshed`);
-                            }
-                            cname_records_amount = cname_records_amount - 1;
-                            if (cname_records_amount == 0) {
-                                try {
-                                    //Deploy a container with a new service
-                                    //await superagent.post(`https://${cluster_id.toLowerCase()}.${domain}/service`).send({ "service_id": service_id }).set({ 'authorization': req.headers['authorization'] }).set('accept', 'json');
-                                    logger.info(`POST /project: Job scheduled: Deployment for project with id: ${service_id}`);
-                                } catch (err) {
-                                    logger.error(`POST /project: Cannot schedule new job: Deploy project with id: ${service_id}, error: ${err.response.text}, status: ${err.response.status}`);
-                                }
-                            }
-                        });
-                    });
-                });
-                */
-  
-          //Adding CNAME record for new environment
-          ovh.request('POST', `/domain/zone/${domain}/record`, {
-            fieldType: 'CNAME',
-            subDomain: subdomain,
-            target: cluster_id.toLowerCase() + `.${domain}.`
-          }, function (err, new_record) {
-            console.log(err || new_record);
-            if (err !=  null){
-              res.statusCode = 500;
-              res.end(JSON.stringify({message:"Unexpected server-side error.", id: "server_error", add_info:err}));
-            }
-            //Refresh OVH DNS records
-            ovh.request('POST', `/domain/zone/${domain}/refresh`, async function (err, is_refreshed) {
-              console.log(err || is_refreshed);
-              if (err !=  null){
-                res.statusCode = 500;
-                res.end(JSON.stringify({message:"Unexpected server-side error.", id: "server_error", add_info:err}));
-              }
-              try {
-                const put_res = await superagent.post(`https://${cluster_id.toLowerCase()}.${domain}/environment`).send({"project_id":project_id}).set({'authorization': req.headers['authorization']}).set('accept', 'json');
-                  if (put_res.statusCode == 200){
-                    console.log('Project added to query');
-                    res.statusCode=201;
-                    res.end(JSON.stringify({}));
-                  }else{
-                    console.log("5");
-
-                    res.statusCode = 401;
-                    res.end(JSON.stringify({message:"Unable to authenticate you.", id: "unauthorized"}));
-                    console.log('Invalid token');
-                  }
-                } catch (err) {
-                  console.log(err);
-                  console.log("6");
-
-                  res.statusCode = 401;
-                  res.end(JSON.stringify({message:"Unable to authenticate you.", id: "unauthorized", add_info:err}));
-                }
-              });
-            });
-  
-  
-          }catch(err){
-            console.log(err);
-            res.statusCode = 401;
-            res.end(JSON.stringify({message:"Unable to authenticate you.", id: "unauthorized", add_info:err}));
-          }
-        });
-  
-        app.delete('/environment', async function (req, res) {
-          try{
-            const logged_user = await auth.handleAllReqs(req, res);
-            if (logged_user == null){
-              return;
-            }
-  
-            const project_id = req.body.project_id;
-            const env_name = req.body.name;
-  
-            //Get project created in /checking_git request
-            var current_project = {};
-            try {
-              const get_res = await superagent.get(Parse.serverURL + '/classes/Project/' + project_id).send({}).set({'X-Parse-Application-Id': ParseAppId, 'X-Parse-Session-Token': req.headers['authorization']}).set('accept', 'json');
-              if (get_res.statusCode != 200){
-                res.statusCode = 401;
-                res.end(JSON.stringify({message:"Unable to authenticate you.", id: "unauthorized"}));
-                return;
-              }else{
-                current_project = get_res.body;
-              }
-            } catch (err) {
-              res.statusCode = 401;
-              res.end(JSON.stringify({message:"Unable to authenticate you.", id: "unauthorized", add_info:err}));
-              return;
-            }
-  
-            var is_environment_found = false;
-  
-            for (let i = 0; i < current_project.environments.length; i++){
-              if (current_project.environments[i].name.toLowerCase() == env_name.toLowerCase()){
-                is_environment_found = true;
-                current_project.environments.splice(i,1);
-              }
-            }
-  
-            if (is_environment_found == false){
-              res.statusCode = 404;
-              res.end(JSON.stringify({message:"Not found", id: "not_found"}));
-              throw "No environment with this name";
-            }
-  
-            var update = {};
-            update.environments = current_project.environments;
-  
-            try {
-              const put_res = await superagent.put(Parse.serverURL + '/classes/Project/' + project_id).send(update).set({'X-Parse-Application-Id': ParseAppId, 'X-Parse-Session-Token': req.headers['authorization']}).set('accept', 'json');
-              if (put_res.statusCode != 200){
-                res.statusCode = 401;
-                res.end(JSON.stringify({message:"Unable to authenticate you.", id: "unauthorized"}));
-              }else{
-                res.statusCode=200;
-                res.end(JSON.stringify({}))
-              }
-            } catch (err) {
-              res.statusCode = 401;
-              res.end(JSON.stringify({message:"Unable to authenticate you.", id: "unauthorized", add_info:err}));
-            }
-  
-          }catch(err){
-            res.statusCode = 401;
-            res.end(JSON.stringify({message:"Unable to authenticate you.", id: "unauthorized", add_info:err}));
-          }
-        });
+    const logged_user = await auth.handleAllReqs(req, res);
+    if (logged_user == null) {
+      return;
     }
+
+    const name = req.body.name;
+
+    //Check that the new name has the correct format
+    //Only letters (a-z), numbers (0-9) and - are allowed and length must be between 2 and 30 characters long
+    var regex = /^([a-z0-9-]{2,30})?$/;
+    if (regex.test(name) != true) {
+      res.statusCode = 400;
+      res.end(JSON.stringify({ message: "The environment name has invalid format. Only letters (a-z), numbers (0-9) and - are allowed and length must be between 2 and 30 characters long", id: "bad_request" }));
+      return;
+    }
+
+    //Check that there is no environment with the same name yet
+    try {
+      const check_name_req = await superagent.get(parse.serverURL + '/classes/Environment').query({ where: { name: name }, keys: "name" }).set({ 'X-Parse-Application-Id': parse.ParseAppId, 'X-Parse-MASTER-Key': parse.PARSE_MASTER_KEY }).set('accept', 'json');
+      if (check_name_req.body.results.length > 0) {
+        res.statusCode = 409;
+        res.end(JSON.stringify({ message: "An environment with the same name already exists", id: "conflict" }));
+        return;
+      }
+    } catch (err) {
+      res.statusCode = err.response.status;
+      res.end(JSON.stringify({ message: err.response.text, id: "unauthorized" }));
+      return;
+    }
+
+    const branch = req.body.branch; //required
+    const service_id = req.body.service_id; //required
+    const server_ids = req.body.server_ids; //required
+
+    const Environment = parse.Object.extend("Environment");
+    const environment = new Environment();
+
+    if (branch) {
+      environment.set("branch", branch);
+    } else {
+      res.statusCode = 400;
+      res.end(JSON.stringify({ message: "branch is required", id: "bad_request" }));
+      return;
+    }
+
+    //Check that servers with server_ids exists
+    //ToDo: Check that target server has available resources to deploy the environment
+    if (server_ids) {
+      try {
+        await superagent.get(parse.serverURL + '/classes/Server/').query({ where: { objectId:{"$in":server_ids}}}).set({ 'X-Parse-Application-Id': parse.ParseAppId, 'X-Parse-Session-Token': req.headers['authorization'] }).set('accept', 'json');
+      } catch (err) {
+        res.statusCode = 404;
+        res.end(JSON.stringify({ message: "No server with server_id has been found", id: "not_found" }));
+        return;
+      }
+    } else {
+      res.statusCode = 400;
+      res.end(JSON.stringify({ message: "server_ids is required", id: "bad_request" }));
+      return;
+    }
+
+    //Check that a service with service_id exists and get the service name
+    var service_name = '';
+    if (service_id) {
+      try {
+        const service_get = await superagent.get(parse.serverURL + '/classes/Service/' + service_id).set({ 'X-Parse-Application-Id': parse.ParseAppId, 'X-Parse-Session-Token': req.headers['authorization'] }).set('accept', 'json');
+        service_name = service_get.body.name;
+        environment.set("service_id", service_id);
+      } catch (err) {
+        res.statusCode = 404;
+        res.end(JSON.stringify({ message: "No service with this service_id has been found", id: "not_found" }));
+        return;
+      }
+    } else {
+      res.statusCode = 400;
+      res.end(JSON.stringify({ message: "service_id is required", id: "bad_request" }));
+      return;
+    }
+    environment.set("domains", [`${name}.${service_name}.${domain}`]);
+
+    //Name field is checked already above
+    environment.set("name", name);
+
+    var acl = new parse.ACL();
+    acl.setPublicReadAccess(false);
+    acl.setPublicWriteAccess(false);
+    acl.setReadAccess(logged_user.objectId, true);
+    acl.setWriteAccess(logged_user.objectId, true);
+    environment.setACL(acl);
+
+    environment.save()
+      .then(async (saved_environment) => {
+
+        //Schedule a job for adding a new CNAME record for this environment in the format: environment_name.project_name.env.DOMAIN
+        //For example, prod.my_project.deployed.cc or dev.my_project.deployed.cc
+        const Job = parse.Object.extend("Job");
+        const job = new Job();
+        job["status"] = "new";
+        job["environment_id"] = saved_environment.id;
+        job["type"] = "domain";
+        job["action"] = "add";
+        job["target"] = "server";
+        job["data"] = { subDomain: name.service_name, target: `${server_id.toLowerCase()}.${domain}`, record_type:"CNAME" };
+
+        var acl = new parse.ACL();
+        acl.setPublicReadAccess(false);
+        acl.setPublicWriteAccess(false);
+        job.setACL(acl);
+
+        job.save()
+          .then(async () => {
+            res.statusCode = 201;
+            res.end(JSON.stringify(saved_environment));
+          }, (error) => {
+            res.statusCode = 401;
+            res.end(JSON.stringify({ message: "Unable to authenticate you.", id: "unauthorized", add_info: error }));
+            logger.error('POST /environment: Failed to schedule a new job, error: ' + error.message);
+          });
+
+      }, (error) => {
+        res.statusCode = 401;
+        res.end(JSON.stringify({ message: "Unable to authenticate you.", id: "unauthorized", add_info: error }));
+        logger.error('POST /environment: Failed to create new environment in DB, error: ' + error.message);
+      });
+  });
+
+  /*
+      Get all environments of a service
+  */
+  app.get('/environment/service/:service_id', async function (req, res) {
+
+    const logged_user = await auth.handleAllReqs(req, res);
+    if (logged_user == null) {
+      return;
+    }
+
+    const service_id = req.params.service_id;
+    try {
+      const environment_res = await superagent.get(parse.serverURL + '/classes/Environment/').query({ where: { service_id: service_id }, order: "-createdAt" }).set({ 'X-Parse-Application-Id': parse.ParseAppId, 'X-Parse-Session-Token': req.headers['authorization'] }).set('accept', 'json');
+      res.statusCode = 200;
+      res.end(JSON.stringify(environment_res.body));
+    } catch (err) {
+      res.statusCode = err.response.status;
+      res.end(JSON.stringify({ message: err.response.text, id: "not_found" }));
+    }
+
+  });
+
+  /*
+    Get an environment
+  */
+  app.get('/environment/:environment_id', async function (req, res) {
+
+    const logged_user = await auth.handleAllReqs(req, res);
+    if (logged_user == null) {
+      return;
+    }
+
+    const environment_id = req.params.environment_id;
+    try {
+      const environment_res = await superagent.get(parse.serverURL + '/classes/Environment/' + environment_id).set({ 'X-Parse-Application-Id': parse.ParseAppId, 'X-Parse-Session-Token': req.headers['authorization'] }).set('accept', 'json');
+      res.statusCode = 200;
+      res.end(JSON.stringify(environment_res.body));
+    } catch (err) {
+      res.statusCode = err.response.status;
+      res.end(JSON.stringify({ message: err.response.text, id: "not_found" }));
+    }
+
+  });
+
+  /*
+    Delete an environment
+  */
+  app.delete('/environment/:environment_id', async function (req, res) {
+
+    const logged_user = await auth.handleAllReqs(req, res);
+    if (logged_user == null) {
+      return;
+    }
+
+    const environment_id = req.params.environment_id;
+    try {
+      const environment_res = await superagent.delete(parse.serverURL + '/classes/Environment/' + environment_id).set({ 'X-Parse-Application-Id': parse.ParseAppId, 'X-Parse-Session-Token': req.headers['authorization'] }).set('accept', 'json');
+      res.statusCode = 200;
+      res.end(JSON.stringify(environment_res.body));
+    } catch (err) {
+      res.statusCode = err.response.status;
+      res.end(JSON.stringify({ message: err.response.text, id: "not_found" }));
+    }
+
+  });
+
+  /*
+    Update an environment
+  */
+  app.put('/environment/:environment_id', async function (req, res) {
+
+    const logged_user = await auth.handleAllReqs(req, res);
+    if (logged_user == null) {
+      return;
+    }
+
+    const environment_id = req.params.environment_id;
+    var environment_update = {};
+    const branch = req.body.branch;
+    if (branch) {
+      environment_update.set("branch", branch);
+    }
+
+    try {
+      const environment_res = await superagent.put(parse.serverURL + '/classes/Environment/' + environment_id).send(environment_update).set({ 'X-Parse-Application-Id': parse.ParseAppId, 'X-Parse-Session-Token': req.headers['authorization'] }).set('accept', 'json');
+      res.statusCode = 200;
+      res.end(JSON.stringify(environment_res.body));
+    } catch (err) {
+      res.statusCode = err.response.status;
+      res.end(JSON.stringify({ message: err.response.text, id: "not_found" }));
+    }
+
+  });
+}

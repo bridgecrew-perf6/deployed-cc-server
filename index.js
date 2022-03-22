@@ -32,32 +32,42 @@ Parse.ParseAppId = ParseAppId;
 Parse.serverURL = process.env.PARSE_SERVER_URL;
 Parse.PARSE_MASTER_KEY = process.env.PARSE_MASTER_KEY;
 
+//OVH API
+const ovh = require('ovh')({
+  endpoint: process.env.OVH_ENDPOINT,
+  appKey: process.env.OVH_APP_KEY,
+  appSecret: process.env.OVH_APP_SECRET,
+  consumerKey: process.env.OVH_CONSUMER_KEY
+});
+
 const { json } = require('body-parser');
 const cors = require('cors');
 var allowedOrigins = ['http://localhost:3000',
-                      'http://localhost:4002',
-                      'https://deployed.cc'];
+  'http://localhost:4002',
+  'https://deployed.cc'];
 
-app.use(cors({credentials: true, origin: function(origin, callback){
-  // allow requests with no origin 
-  // (like mobile apps or curl requests)
-  if(!origin) return callback(null, true);
-  if(allowedOrigins.indexOf(origin) === -1){
-    var msg = 'The CORS policy for this site does not ' +
-              'allow access from the specified Origin.';
-    return callback(new Error(msg), false);
+app.use(cors({
+  credentials: true, origin: function (origin, callback) {
+    // allow requests with no origin 
+    // (like mobile apps or curl requests)
+    if (!origin) return callback(null, true);
+    if (allowedOrigins.indexOf(origin) === -1) {
+      var msg = 'The CORS policy for this site does not ' +
+        'allow access from the specified Origin.';
+      return callback(new Error(msg), false);
+    }
+    return callback(null, true);
   }
-  return callback(null, true);
-}
 }));
 app.use(json());
 app.use(cookieParser());
 
 //Create routes
-require("./routes/cluster")(app);
+require("./routes/server")(app, logger, Parse);
+require("./routes/job")(app, logger, Parse);
 require("./routes/config")(app);
 require("./routes/domain")(app);
-require("./routes/environment")(app);
+require("./routes/environment")(app, logger, Parse);
 require("./routes/event")(app);
 require("./routes/health")(app);
 require("./routes/service")(app, logger, Parse);
