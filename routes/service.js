@@ -10,9 +10,13 @@ const auth = new Auth();
 module.exports = function (app, logger, parse) {
 
     /*
-        Get all services of a project
+        Get all services saved within a project with project_id
     */
     app.get('/service/project/:project_id', async function (req, res) {
+
+        // #swagger.tags = ['Service']
+        // #swagger.description = 'Get all services saved within a project with project_id'
+        // #swagger.parameters['project_id'] = { description: 'Id of a project to filer services' }
 
         const logged_user = await auth.handleAllReqs(req, res);
         if (logged_user == null) {
@@ -28,6 +32,10 @@ module.exports = function (app, logger, parse) {
             res.statusCode = err.response.status;
             res.end(JSON.stringify({ message: err.response.text, id: "not_found" }));
         }
+
+         /* #swagger.responses[200] = { 
+               description: 'Service object is returned'
+        }*/
 
     });
 

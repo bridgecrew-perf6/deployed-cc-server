@@ -1,3 +1,6 @@
+//Load info from package.json
+const pjson = require('./package.json');
+
 const polka = require('polka');
 const app = polka();
 
@@ -23,6 +26,30 @@ const logger = winston.createLogger({
 //Log examples:
 //logger.info('Some info');
 //logger.error('Some error');
+
+//Docs using Swagger
+const doc = {
+  info: {
+      version: pjson.version,
+      title: "Deployed.cc Server API",
+      description: "Documentation for API for deployed.cc"
+  },
+  host: "deployed.cc",
+  basePath: "/",
+  schemes: ['http', 'https'],
+  consumes: ['application/json'],
+  produces: ['application/json'],
+  tags: [
+      {
+          "name": "Service",
+          "description": "Service Endpoints"
+      }
+  ]
+}
+const swaggerAutogen = require('swagger-autogen')()
+const outputFile = './swagger_output.json'
+const endpointsFiles = ['./routes/service']
+swaggerAutogen(outputFile, endpointsFiles, doc)
 
 const Parse = require('parse/node');
 const ParseAppId = process.env.PARSE_APP_ID;
@@ -75,13 +102,21 @@ require("./routes/project")(app, logger, Parse);
 require("./routes/deploy")(app, logger);
 require("./routes/user")(app);
 
+//SSL certificate manager
+//Used to request new ssl certificates over ZeroSSL API
+const certificate_manager = require("./internal/certificate_manager");
+//certificate_manager.createCertificate("hey.deployed.cc","hey@deployed.cc");
+
+//Start the job manager
+require("./internal/job_manager")(logger, Parse, dotenv);
+
 //Start server provision queue
 const provision = require("./internal/provision");
 setInterval(provision.provisionNextClient, process.env.CHECK_PROVISION_QUEUE_INTERVAL);
 
 //Start client monitoring queue
-const monitoring = require("./internal/client_monitoring");
-setInterval(monitoring.getServerStats, process.env.CHECK_CLIENT_HEALTH_INTERVAL);
+//const monitoring = require("./internal/client_monitoring");
+//setInterval(monitoring.getServerStats, process.env.CHECK_CLIENT_HEALTH_INTERVAL);
 
 app.listen(process.env.PORT, err => {
   if (err) throw err;

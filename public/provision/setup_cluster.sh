@@ -62,11 +62,11 @@ DEBIAN_FRONTEND=noninteractive apt-get install -y snapd
 sudo snap install --classic certbot
 sudo ln -s /snap/bin/certbot /usr/bin/certbot
 
-certbot certonly --non-interactive --agree-tos -m dev@{{domain}} --webroot -w /root/dep-cluster/certs -d {{cluster_id}}.{{domain}}
-DOMAIN='{{cluster_id}}.{{domain}}' sudo -E bash -c 'cat /etc/letsencrypt/live/$DOMAIN/fullchain.pem /etc/letsencrypt/live/$DOMAIN/privkey.pem > /etc/haproxy/certs/$DOMAIN.pem'
+#certbot certonly --non-interactive --agree-tos -m dev@{{domain}} --webroot -w /root/dep-cluster/certs -d {{cluster_id}}.{{domain}}
+#DOMAIN='{{cluster_id}}.{{domain}}' sudo -E bash -c 'cat /etc/letsencrypt/live/$DOMAIN/fullchain.pem /etc/letsencrypt/live/$DOMAIN/privkey.pem > /etc/haproxy/certs/$DOMAIN.pem'
 
-rm /etc/haproxy/haproxy.cfg
-mv /root/haproxy-ssl.cfg /etc/haproxy/haproxy.cfg
-sudo systemctl restart haproxy
+#rm /etc/haproxy/haproxy.cfg
+#mv /root/haproxy-ssl.cfg /etc/haproxy/haproxy.cfg
+#sudo systemctl restart haproxy
 
 curl -d '{"cluster_id":"{{cluster_parse_obj_id}}"}'  -H "authorization:{{token}}" -H "Content-Type: application/json" -X POST {{url}}/cluster-ready

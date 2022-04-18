@@ -5,12 +5,6 @@
 const superagent = require('superagent');
 
 const domain = process.env.SERVER_DOMAIN;
-const ovh = require('ovh')({
-	endpoint: process.env.OVH_ENDPOINT,
-	appKey: process.env.OVH_APP_KEY,
-	appSecret: process.env.OVH_APP_SECRET,
-	consumerKey: process.env.OVH_CONSUMER_KEY
-});
 
 const Auth = require("./auth");
 const auth = new Auth();
@@ -101,33 +95,6 @@ module.exports = function (app, logger, parse) {
 
 				//ToDo: Create new job to add a domain to DNS records
 				//Add a job to provision a server
-
-				//Here will be code to add A record new server IP -> cluster_id.${domain}
-				/*ovh.request('POST', `/domain/zone/${domain}/record`, {
-					fieldType: 'A',
-					subDomain: cluster_id,
-					target: new_cluster.ip
-				}, function (err, new_record) {
-					console.log(err || new_record);
-					if (err != null) {
-						res.statusCode = 500;
-						res.end(JSON.stringify({ message: 'Unexpected server-side error', id: "server_error", add_info: err }));
-					}
-					//Refresh OVH DNS records
-					ovh.request('POST', `/domain/zone/${domain}/refresh`, function (err, is_refreshed) {
-						console.log(err || is_refreshed);
-						if (err == null) {
-							//Add cluster to provision queue
-							provision.addClusterToQueue(new_cluster);
-
-							res.statusCode = 201;
-							res.end(JSON.stringify({ id: cluster.id }));
-						} else {
-							res.statusCode = 500;
-							res.end(JSON.stringify({ message: 'Unexpected server-side error', id: "server_error", add_info: err }));
-						}
-					});
-				});*/
 
 			}, (error) => {
 				res.statusCode = 500;
