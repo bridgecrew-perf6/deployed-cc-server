@@ -21,9 +21,9 @@ module.exports = function (logger, parse) {
             logger.info('Checking new jobs for deployed-server...');
             is_job_running = true;
 
-            //Get all jobs with status "new" and find the next job to start
+            //Get all jobs with statuses "new","failed" and find the next job to run
             try {
-                const job_res = await superagent.get(parse.serverURL + '/classes/Job/').query({ where: { status: "new", scope:"server" }, order: "-createdAt" }).set({ 'X-Parse-Application-Id': parse.ParseAppId, 'X-Parse-MASTER-Key': parse.PARSE_MASTER_KEY }).set('accept', 'json');
+                const job_res = await superagent.get(parse.serverURL + '/classes/Job/').query({ where: { status: {$in:["new","failed"]}, scope:"server" }, order: "-createdAt" }).set({ 'X-Parse-Application-Id': parse.ParseAppId, 'X-Parse-MASTER-Key': parse.PARSE_MASTER_KEY }).set('accept', 'json');
                 const new_jobs = job_res.body;
 
                 if (new_jobs.results.length > 0) {
@@ -31,29 +31,27 @@ module.exports = function (logger, parse) {
 
                     //Find the next job to run
                     var job_to_run = null;
-                    for (job in new_jobs.results) {
+                    for (job of new_jobs.results) {
                         const currentDate = new Date();
-                        if (job_to_run.start_after != undefined && job_to_run.start_after > currentDate.getTime()){
-                            //Skip this job
+                        if (job.start_after != undefined && job.start_after > currentDate.getTime()){
+                            //Skip this job, we should run it later 
                             continue;
+                        }else{
+                            job_to_run = job;
+                            break;
                         }
-                        job_to_run = job;
                     }
 
                     if (job_to_run == null){
                         logger.info(`No jobs found. All jobs scheduled on later time`);
+                        is_job_running = false;
                         return;
                     }
 
-                    //Start the found job
+                    //Start the job
                     logger.info(`The job with id: ${job_to_run.objectId} is scheduled`);
 
-                    //ToDo: Add checking that there is no dependency for this task
-                    //If there is a dependency - check that the job on which this job depends on has the status ready
-                    //If not - check the next job with status "new"
-
                     //ToDo: Check if we have a job with status "in_progress", for example if the service is stopped
-
                     //ToDo: Add handling multiple tasks simultaneously
 
                     if (job_to_run.type == "dns") {
@@ -83,8 +81,9 @@ module.exports = function (logger, parse) {
         try{
             await updateJobStatus(job, "in_progress");
             await dns_job_handler.run(job, logger, jobFinished);
-        }catch (err){
-            logger.info(`Cannot finish the job with id: ${job.objectId}, err: ${err}`);
+        }catch (error){
+            logger.error(`New exception is catched in startDNSJob, job_manager.js: ${error}`);
+            jobFinished(job, error);
         }
     }
 
@@ -93,8 +92,9 @@ module.exports = function (logger, parse) {
         try{
             await updateJobStatus(job, "in_progress");
             await client_provision.run(job, logger, jobFinished);
-        }catch (err){
-            logger.info(`Cannot finish the job with id: ${job.objectId}, err: ${err}`);
+        }catch (error){
+            logger.error(`New exception is catched in startClientProvisionJob, job_manager.js: ${error}`);
+            jobFinished(job, error);
         }
     }
 
@@ -116,17 +116,18 @@ module.exports = function (logger, parse) {
         var job_update = {};
         if (status) {
             job_update["status"] = status;
-            if (notes != undefined){
-                job_update["notes"] = notes;
-                job_update["start_after"] = next_run_time;
-            }
+        }
+        if (notes){
+            job_update["notes"] = JSON.stringify(notes);
+        }
+        if (next_run_time){
+            job_update["start_after"] = next_run_time;
         }
         try {
             await superagent.put(parse.serverURL + '/classes/Job/' + job.objectId).send(job_update).set({ 'X-Parse-Application-Id': parse.ParseAppId, 'X-Parse-MASTER-Key': parse.PARSE_MASTER_KEY }).set('accept', 'json');
             logger.info(`Status for the job with id: ${job.objectId} is updated from ${job.status} to ${status}`);
         } catch (err) {
             logger.error(`Cannot update the job with id ${job.objectId}, err: ${err}`);
-            //ToDo: Retry to update job otherwise we'll think that job is in progress feorever
         }
     }
 

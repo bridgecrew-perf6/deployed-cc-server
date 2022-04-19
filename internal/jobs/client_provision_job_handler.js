@@ -22,10 +22,10 @@ dotenv.config();
 const dns = require('dns');
 
 async function run(job, logger, finish_handler) {
-    logger.info(`Run the DNS job with id: ${job.objectId}`);
+    logger.info(`Run the Client Provision job with id: ${job.objectId}`);
 
     const task = job.task;
-    if (task == undefined || task.record_type == ip){
+    if (task == undefined || task.ip == undefined){
         finish_handler(job, "The task dictionary hasn't all required values");
         return;
     }
@@ -34,7 +34,7 @@ async function run(job, logger, finish_handler) {
     const condition_to_start = job.condition_to_start;
     if (condition_to_start != undefined && condition_to_start.domain != undefined && condition_to_start.target != undefined){
         logger.info(`Checking A record for ${condition_to_start.domain}. IP for this domain should be ${condition_to_start.target}`);
-        dns.lookup(condition_to_start.domain, (err, address, family) => {
+        dns.resolve4(condition_to_start.domain, (err, address, family) => {
             if (err){
                 finish_handler(job, err);
                 return;
