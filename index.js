@@ -59,14 +59,6 @@ Parse.ParseAppId = ParseAppId;
 Parse.serverURL = process.env.PARSE_SERVER_URL;
 Parse.PARSE_MASTER_KEY = process.env.PARSE_MASTER_KEY;
 
-//OVH API
-const ovh = require('ovh')({
-  endpoint: process.env.OVH_ENDPOINT,
-  appKey: process.env.OVH_APP_KEY,
-  appSecret: process.env.OVH_APP_SECRET,
-  consumerKey: process.env.OVH_CONSUMER_KEY
-});
-
 const { json } = require('body-parser');
 const cors = require('cors');
 var allowedOrigins = ['http://localhost:3000',
@@ -108,11 +100,7 @@ const certificate_manager = require("./internal/certificate_manager");
 //certificate_manager.createCertificate("hey.deployed.cc","hey@deployed.cc");
 
 //Start the job manager
-require("./internal/job_manager")(logger, Parse, dotenv);
-
-//Start server provision queue
-const provision = require("./internal/provision");
-setInterval(provision.provisionNextClient, process.env.CHECK_PROVISION_QUEUE_INTERVAL);
+require("./internal/job_manager")(logger, Parse);
 
 //Start client monitoring queue
 //const monitoring = require("./internal/client_monitoring");

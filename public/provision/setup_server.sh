@@ -22,27 +22,16 @@ mv /root/cluster_config.json /root/.deployed/config.json
 
 while sudo fuser /var/{lib/{dpkg,apt/lists},cache/apt/archives}/lock >/dev/null 2>&1; do sleep 1; done
 
-DEBIAN_FRONTEND=noninteractive sudo apt-get update
-DEBIAN_FRONTEND=noninteractive sudo apt-get install -y \
-    apt-transport-https \
-    ca-certificates \
-    curl \
-    gnupg \
-    lsb-release
-curl -fsSL https://download.docker.com/linux/ubuntu/gpg | sudo gpg --dearmor -o /usr/share/keyrings/docker-archive-keyring.gpg
-
-echo \
-  "deb [arch=amd64 signed-by=/usr/share/keyrings/docker-archive-keyring.gpg] https://download.docker.com/linux/ubuntu \
-  $(lsb_release -cs) stable" | sudo tee /etc/apt/sources.list.d/docker.list > /dev/null
-
-  while sudo fuser /var/{lib/{dpkg,apt/lists},cache/apt/archives}/lock >/dev/null 2>&1; do sleep 1; done
-
-
-DEBIAN_FRONTEND=noninteractive sudo apt-get update
-DEBIAN_FRONTEND=noninteractive sudo apt-get install -y docker-ce docker-ce-cli containerd.io
+DEBIAN_FRONTEND=noninteractive sudo apt-get -y update
+DEBIAN_FRONTEND=noninteractive sudo apt-get install curl wget gnupg2 -y
+. /etc/os-release
+sudo sh -c "echo 'deb http://download.opensuse.org/repositories/devel:/kubic:/libcontainers:/stable/xUbuntu_${VERSION_ID}/ /' > /etc/apt/sources.list.d/devel:kubic:libcontainers:stable.list"
+sudo wget -nv https://download.opensuse.org/repositories/devel:kubic:libcontainers:stable/xUbuntu_${VERSION_ID}/Release.key
+sudo apt-key add Release.key
+DEBIAN_FRONTEND=noninteractive sudo apt-get update -qq -y
+DEBIAN_FRONTEND=noninteractive sudo apt-get -qq --yes install podman
 
 while sudo fuser /var/{lib/{dpkg,apt/lists},cache/apt/archives}/lock >/dev/null 2>&1; do sleep 1; done
-
 
 DEBIAN_FRONTEND=noninteractive sudo apt-get install -y haproxy
 mkdir /etc/haproxy/certs
@@ -52,15 +41,16 @@ sudo systemctl restart haproxy
 
 git clone {{client_URL}}
 cd dep-cluster
+npm cache clean --force
 npm install
 pm2 start index.js --name "dep-cluster"
 
 while sudo fuser /var/{lib/{dpkg,apt/lists},cache/apt/archives}/lock >/dev/null 2>&1; do sleep 1; done
 
 
-DEBIAN_FRONTEND=noninteractive apt-get install -y snapd
-sudo snap install --classic certbot
-sudo ln -s /snap/bin/certbot /usr/bin/certbot
+#DEBIAN_FRONTEND=noninteractive apt-get install -y snapd
+#sudo snap install --classic certbot
+#sudo ln -s /snap/bin/certbot /usr/bin/certbot
 
 #certbot certonly --non-interactive --agree-tos -m dev@{{domain}} --webroot -w /root/dep-cluster/certs -d {{cluster_id}}.{{domain}}
 #DOMAIN='{{cluster_id}}.{{domain}}' sudo -E bash -c 'cat /etc/letsencrypt/live/$DOMAIN/fullchain.pem /etc/letsencrypt/live/$DOMAIN/privkey.pem > /etc/haproxy/certs/$DOMAIN.pem'
@@ -68,5 +58,3 @@ sudo ln -s /snap/bin/certbot /usr/bin/certbot
 #rm /etc/haproxy/haproxy.cfg
 #mv /root/haproxy-ssl.cfg /etc/haproxy/haproxy.cfg
 #sudo systemctl restart haproxy
-
-curl -d '{"cluster_id":"{{cluster_parse_obj_id}}"}'  -H "authorization:{{token}}" -H "Content-Type: application/json" -X POST {{url}}/cluster-ready
