@@ -9,10 +9,11 @@ var is_job_running = false;
 //Import Job Handlers
 const dns_job_handler = require("./jobs/dns_job_handler");
 const client_provision = require("./jobs/client_provision_job_handler");
+const create_tls_certificate = require("./jobs/create_tls_certificate_job_handler");
 
 module.exports = function (logger, parse) {
 
-    setInterval( function() {startNextJob(); }, process.env.RUN_NEXT_JOB_INTERVAL);
+    setInterval(function () { startNextJob(); }, process.env.RUN_NEXT_JOB_INTERVAL);
 
     //Check if we have a new job to run
     async function startNextJob() {
@@ -23,7 +24,7 @@ module.exports = function (logger, parse) {
 
             //Get all jobs with statuses "new","failed" and find the next job to run
             try {
-                const job_res = await superagent.get(parse.serverURL + '/classes/Job/').query({ where: { status: {$in:["new","failed"]}, scope:"server" }, order: "-createdAt" }).set({ 'X-Parse-Application-Id': parse.ParseAppId, 'X-Parse-MASTER-Key': parse.PARSE_MASTER_KEY }).set('accept', 'json');
+                const job_res = await superagent.get(parse.serverURL + '/classes/Job/').query({ where: { status: { $in: ["new", "failed"] }, scope: "server" }, order: "-createdAt" }).set({ 'X-Parse-Application-Id': parse.ParseAppId, 'X-Parse-MASTER-Key': parse.PARSE_MASTER_KEY }).set('accept', 'json');
                 const new_jobs = job_res.body;
 
                 if (new_jobs.results.length > 0) {
@@ -33,16 +34,16 @@ module.exports = function (logger, parse) {
                     var job_to_run = null;
                     for (job of new_jobs.results) {
                         const currentDate = new Date();
-                        if (job.start_after != undefined && job.start_after > currentDate.getTime()){
+                        if (job.start_after != undefined && job.start_after > currentDate.getTime()) {
                             //Skip this job, we should run it later 
                             continue;
-                        }else{
+                        } else {
                             job_to_run = job;
                             break;
                         }
                     }
 
-                    if (job_to_run == null){
+                    if (job_to_run == null) {
                         logger.info(`No jobs found. All jobs scheduled on later time`);
                         is_job_running = false;
                         return;
@@ -58,6 +59,8 @@ module.exports = function (logger, parse) {
                         startDNSJob(job_to_run);
                     } else if (job_to_run.type == "client_provision") {
                         startClientProvisionJob(job_to_run);
+                    } else if (job_to_run.type == "create_tls_certificate") {
+                        createTLSCertificateJob(job_to_run);
                     } else {
                         logger.info(`There is no handler for the job with id: ${job_to_run.objectId}. Mark this job as 'cancelled' with a note 'No handler for this type of a job'`);
                         //If we cannot handle a job with this type - just skip this for now
@@ -76,36 +79,47 @@ module.exports = function (logger, parse) {
         }
     }
 
-    //Handle DNS jobs
+    //DNS job
     async function startDNSJob(job) {
-        try{
+        try {
             await updateJobStatus(job, "in_progress");
             await dns_job_handler.run(job, logger, jobFinished);
-        }catch (error){
+        } catch (error) {
             logger.error(`New exception is catched in startDNSJob, job_manager.js: ${error}`);
             jobFinished(job, error);
         }
     }
 
-    //Handle Client Provision jobs
+    //Client Provision job
     async function startClientProvisionJob(job) {
-        try{
+        try {
             await updateJobStatus(job, "in_progress");
             await client_provision.run(job, logger, jobFinished);
-        }catch (error){
+        } catch (error) {
             logger.error(`New exception is catched in startClientProvisionJob, job_manager.js: ${error}`);
+            jobFinished(job, error);
+        }
+    }
+
+    //Create TLS certificate job
+    async function createTLSCertificateJob(job) {
+        try {
+            await updateJobStatus(job, "in_progress");
+            await create_tls_certificate.run(job, logger, jobFinished);
+        } catch (error) {
+            logger.error(`New exception is catched in createTLSCertificateJob, job_manager.js: ${error}`);
             jobFinished(job, error);
         }
     }
 
     //Callback which should be called from the "run" function of a job handler
     async function jobFinished(job, error) {
-        if (error != null){
+        if (error != null) {
             const currentDate = new Date();
-            const next_run_time = currentDate.getTime() + 10*1000;
+            const next_run_time = currentDate.getTime() + 10 * 1000;
             logger.error(`Cannot finish the job with id: ${job.objectId}, err: ${error}. Schedule next run on ${next_run_time}`);
             await updateJobStatus(job, "failed", error, next_run_time);
-        }else{
+        } else {
             await updateJobStatus(job, "done");
         }
         is_job_running = false;
@@ -117,10 +131,10 @@ module.exports = function (logger, parse) {
         if (status) {
             job_update["status"] = status;
         }
-        if (notes){
+        if (notes) {
             job_update["notes"] = JSON.stringify(notes);
         }
-        if (next_run_time){
+        if (next_run_time) {
             job_update["start_after"] = next_run_time;
         }
         try {

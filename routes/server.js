@@ -4,12 +4,8 @@
 */
 const superagent = require('superagent');
 
-const domain = process.env.SERVER_DOMAIN;
-
 const Auth = require("./auth");
 const auth = new Auth();
-
-var provision = require('../internal/provision');
 
 module.exports = function (app, logger, parse) {
 
@@ -95,6 +91,7 @@ module.exports = function (app, logger, parse) {
 
 				//ToDo: Create new job to add a domain to DNS records
 				//Add a job to provision a server
+				
 
 			}, (error) => {
 				res.statusCode = 500;

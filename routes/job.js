@@ -115,25 +115,36 @@ module.exports = function (app, logger, parse) {
     });
 
     /*
-        Get all jobs for :target_id with :status
+        Get all jobs for :target_id with :statuses (separated by a comma, for example, "new,failed")
     */
-    app.get('/job/:target_id/status/:status', async function (req, res) {
+    app.get('/job/:target_id/status/:statuses', async function (req, res) {
 
-        //We should use a special user to get jobs
-        const logged_user = await auth.handleAllReqs(req, res);
-        if (logged_user == null) {
+        const target_id = req.params.target_id;
+       
+        //Check if api_key is correct. Each user's server has own api key
+        try {
+            const server_res = await superagent.get(parse.serverURL + '/classes/Server/' + target_id).send({}).set({ 'X-Parse-Application-Id': parse.ParseAppId, 'X-Parse-MASTER-Key': parse.PARSE_MASTER_KEY }).set('accept', 'json');
+            if (req.headers["api_key"] != server_res.body.api_key) {
+                res.statusCode = 401;
+                res.end(JSON.stringify({ message: "Unable to authenticate you.", id: "unauthorized" }));
+                return;
+            }
+        } catch (error) {
+            logger.error('GET /job/:target_id/status/:statuses. Error: ' + error.message);
+            res.statusCode = 401;
+            res.end(JSON.stringify({ message: "Unable to authenticate you.", id: "unauthorized" }));
             return;
         }
 
-        const target_id = req.params.target_id;
-        //ToDo add checking by status
-        const status = req.params.status;
+        const statuses = req.params.statuses.split(",");
 
         try {
-            const job_res = await superagent.get(parse.serverURL + '/classes/Job/').query({ where: { target_id: target_id }, order: "-createdAt" }).set({ 'X-Parse-Application-Id': parse.ParseAppId, 'X-Parse-Session-Token': req.headers['authorization'] }).set('accept', 'json');
+            const job_res = await superagent.get(parse.serverURL + '/classes/Job/').query({  where: { status: { $in: statuses }, target: target_id }, order: "-createdAt" }).set({ 'X-Parse-Application-Id': parse.ParseAppId, 'X-Parse-MASTER-Key': parse.PARSE_MASTER_KEY }).set('accept', 'json');
+            res.writeHead(200, { 'Content-Type': 'application/json' });
             res.statusCode = 200;
             res.end(JSON.stringify(job_res.body));
         } catch (err) {
+            logger.error('GET /job/:target_id/status/:statuses. Error: ' + err.message);
             res.statusCode = err.response.status;
             res.end(JSON.stringify({ message: err.response.text, id: "not_found" }));
         }
@@ -191,11 +202,17 @@ module.exports = function (app, logger, parse) {
     */
     app.put('/job/:job_id', async function (req, res) {
 
-        //We should use a special user to get jobs
-        //Note: Only status of a job can be updated
-
-        const logged_user = await auth.handleAllReqs(req, res);
-        if (logged_user == null) {
+        //Check if api_key is correct. Each user's server has own api key
+        try {
+            const server_res = await superagent.get(Parse.serverURL + '/classes/Server/' + target_id).send({}).set({ 'X-Parse-Application-Id': ParseAppId, 'X-Parse-MASTER-Key': parse.PARSE_MASTER_KEY }).set('accept', 'json');
+            if (req.headers["api_key"] != server_res.body.api_key) {
+                res.statusCode = 401;
+                res.end(JSON.stringify({ message: "Unable to authenticate you.", id: "unauthorized" }));
+                return;
+            }
+        } catch (error) {
+            res.statusCode = 401;
+            res.end(JSON.stringify({ message: "Unable to authenticate you.", id: "unauthorized" }));
             return;
         }
 

@@ -94,11 +94,6 @@ require("./routes/project")(app, logger, Parse);
 require("./routes/deploy")(app, logger);
 require("./routes/user")(app);
 
-//SSL certificate manager
-//Used to request new ssl certificates over ZeroSSL API
-const certificate_manager = require("./internal/certificate_manager");
-//certificate_manager.createCertificate("hey.deployed.cc","hey@deployed.cc");
-
 //Start the job manager
 require("./internal/job_manager")(logger, Parse);
 
